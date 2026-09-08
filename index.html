@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <!-- viewport: user-scalable=no keeps the game from zooming when the player
+         double-taps the on-screen D-pad on a phone. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Neon Eel: Overdrive</title>
+
+    <!-- ============================================================
+         PWA: manifest + icons + theme color. sw.js (registered from
+         script.js) is what makes the game installable and playable
+         offline — see the note at the top of sw.js for the file:// caveat.
+         ============================================================ -->
+    <link rel="manifest" href="manifest.webmanifest">
+    <meta name="theme-color" content="#0b0c10">
+    <link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Neon Eel">
+    <meta name="mobile-web-app-capable" content="yes">
+
+    <!-- Styles live in their own file so this project can be wrapped as a
+         mobile app (Median.co / Appilix / Swing2App) exactly like a website. -->
+    <!-- The ?v=N is a "cache-buster": bump the number whenever you change
+         style.css or script.js so the browser is forced to load the new file
+         instead of an old cached copy. -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <!-- ============================================================
+         SPLASH / INTRO SCREEN — covers everything for ~3s on every
+         fresh load, then fades out. The game underneath is already
+         fully initialized by the time it's revealed; this is purely
+         a cosmetic intro, not a loading gate.
+         ============================================================ -->
+    <div id="splashScreen" class="splash-screen">
+        <img src="icons/icon-192.png" alt="Neon Eel: Overdrive logo" class="splash-logo">
+        <h1 class="splash-title">NEON EEL</h1>
+        <p class="splash-subtitle">OVERDRIVE</p>
+    </div>
+
+    <!-- ============================================================
+         TOP BAR — lives OUTSIDE the phone panel (game-container).
+         Shows the player's persistent coin total and opens the shop.
+         ============================================================ -->
+    <div class="top-bar">
+        <div class="coin-display">🪙 <span id="coinCount">0</span></div>
+        <div class="top-bar-actions">
+            <button id="shopBtn" class="shop-btn">🛒 SHOP</button>
+        </div>
+    </div>
+
+    <!-- ============================================================
+         MAIN GAME PANEL
+         ============================================================ -->
+    <div class="game-container">
+
+        <!-- ---- Top HUD: score / best / level / speed. The pause button is
+                 pinned to the right and lines up with the SPEED row. ---- -->
+        <div class="header">
+            <div class="stats">
+                <div class="stat">SCORE: <span id="score">0</span></div>
+                <div class="stat">BEST: <span id="highScore">0</span></div>
+                <div class="stat">LEVEL: <span id="level">1</span></div>
+                <div class="stat">SPEED: <span id="speed">100</span>%</div>
+                <button id="bombClearBtn" class="bomb-clear-btn hidden" aria-label="Clear 5 bombs" title="Clear 5 bombs">💣<span id="bombClearCount">0</span></button>
+                <button id="pauseBtn" class="pause-btn hidden" aria-label="Pause">&#10073;&#10073;</button>
+            </div>
+        </div>
+
+        <!-- ---- Playfield ---- -->
+        <div class="board-wrapper" id="boardWrapper">
+            <!-- Internal resolution stays 400x400; CSS scales it down on small
+                 screens. All drawing uses the internal 400px coordinate space. -->
+            <canvas id="gameCanvas" width="400" height="400"></canvas>
+
+            <!-- Toast / warning banner (hazard incoming, level up, +100, etc.) -->
+            <div id="toast" class="toast"></div>
+
+            <!-- "Press to start" hint, hidden after the first move -->
+            <div id="startScreen" class="overlay">
+                <h2 class="start-title">NEON EEL</h2>
+                <p>Swipe, tap a D-pad arrow,<br>or press an <strong>arrow key</strong> to start</p>
+            </div>
+
+            <!-- Game-over screen -->
+            <div id="gameOverScreen" class="overlay hidden">
+                <h2>CRASHED!</h2>
+                <p id="deathReason">You crashed.</p>
+                <p class="final-stats">
+                    Score <span id="finalScore">0</span> &nbsp;•&nbsp; Level <span id="finalLevel">1</span>
+                </p>
+                <p class="best-line">BEST <span id="finalBest">0</span></p>
+                <p class="coin-line">+<span id="coinsEarned">0</span> 🪙 &nbsp;•&nbsp; TOTAL <span id="totalCoinsFinal">0</span> 🪙</p>
+                <!-- Only shown when this run set a new record -->
+                <div id="newBestBadge" class="new-best hidden">★ NEW BEST! ★</div>
+                <div class="game-over-actions">
+                    <!-- Only shown when the player owns at least one Second Chance charge -->
+                    <button id="continueBtn" class="btn continue-btn hidden">&#9654; CONTINUE</button>
+                    <!-- Works for both keyboard (SPACE) and touch (button tap) -->
+                    <button id="restartBtn" class="btn">RESTART</button>
+                </div>
+            </div>
+
+            <!-- Paused overlay -->
+            <div id="pauseScreen" class="overlay hidden">
+                <h2 class="pause-title">PAUSED</h2>
+                <button id="resumeBtn" class="btn">&#9654; RESUME</button>
+            </div>
+
+            <!-- Resume countdown (3 - 2 - 1) -->
+            <div id="countdownScreen" class="overlay hidden countdown-overlay">
+                <span id="countdownNum">3</span>
+            </div>
+        </div>
+
+        <!-- ============================================================
+             ON-SCREEN TOUCH CONTROLS (D-pad)
+             Also usable with a mouse. Arranged as a 3x3 cross grid.
+             ============================================================ -->
+        <div class="touch-controls" id="touchControls">
+            <button class="dpad-btn up"    data-dir="up"    aria-label="Move up">▲</button>
+            <button class="dpad-btn left"  data-dir="left"  aria-label="Move left">◀</button>
+            <button class="dpad-btn down"  data-dir="down"  aria-label="Move down">▼</button>
+            <button class="dpad-btn right" data-dir="right" aria-label="Move right">▶</button>
+        </div>
+    </div>
+
+    <!-- ============================================================
+         INSTRUCTIONS + ITEM LEGEND
+         ============================================================ -->
+    <div class="controls">
+        <div class="legend">
+            <span class="legend-item"><i class="dot food"></i>Food +20</span>
+            <span class="legend-item"><i class="dot diamond"></i>Diamond +100</span>
+            <span class="legend-item"><i class="dot penalty"></i>Penalty −100</span>
+            <span class="legend-item"><i class="dot bomb"></i>Bomb = crash</span>
+            <span class="legend-item"><i class="dot hazard"></i>Hazard (Lv2+) bites</span>
+            <span class="legend-item"><i class="dot shield"></i>Shield = protect</span>
+        </div>
+        <p>
+            Move with <kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> /
+            <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>, the D-pad, or swipe.
+            Restart with <kbd>SPACE</kbd>.
+        </p>
+    </div>
+
+    <!-- ============================================================
+         SHOP OVERLAY — blurs the whole page (not just the phone panel).
+         Lets the player spend coins to unlock eel colors.
+         ============================================================ -->
+    <div id="shopOverlay" class="shop-overlay hidden">
+        <div class="shop-card">
+            <div class="shop-header">
+                <h2>EEL SHOP</h2>
+                <div class="shop-coin-display">🪙 <span id="shopCoinCount">0</span></div>
+                <button id="closeShopBtn" class="close-shop-btn" aria-label="Close shop">✕</button>
+            </div>
+
+            <div class="shop-tabs">
+                <button id="colorsTabBtn" class="shop-tab-btn active">🎨 COLORS</button>
+                <button id="itemsTabBtn" class="shop-tab-btn">✨ ITEMS</button>
+            </div>
+
+            <div id="colorsTabPanel" class="shop-tab-panel">
+                <h3 class="shop-group-heading">🐍 Eel Colors</h3>
+                <div class="shop-section">
+                    <h3 class="tier-basic">Basic Colors</h3>
+                    <div class="color-grid" id="basicColorList"></div>
+                </div>
+
+                <div class="shop-section">
+                    <h3 class="tier-advanced">Advanced Colors</h3>
+                    <div class="color-grid" id="advancedColorList"></div>
+                </div>
+
+                <div class="shop-section">
+                    <h3 class="tier-custom">Custom Color</h3>
+                    <div class="color-grid" id="customColorList"></div>
+                </div>
+
+                <div class="shop-section">
+                    <h3 class="tier-gradient">Gradient Color</h3>
+                    <div class="color-grid" id="gradientColorList"></div>
+                </div>
+
+                <h3 class="shop-group-heading">📱 Frame Theme</h3>
+                <p class="shop-group-hint">Colors the phone frame — the board's tint follows it automatically.</p>
+                <div class="shop-section">
+                    <h3 class="tier-basic">Basic Frames</h3>
+                    <div class="color-grid" id="frameBasicColorList"></div>
+                </div>
+
+                <div class="shop-section">
+                    <h3 class="tier-advanced">Advanced Frames</h3>
+                    <div class="color-grid" id="frameAdvancedColorList"></div>
+                </div>
+
+                <div class="shop-section">
+                    <h3 class="tier-custom">Custom Frame</h3>
+                    <div class="color-grid" id="frameCustomColorList"></div>
+                </div>
+
+                <div class="shop-section">
+                    <h3 class="tier-gradient">Gradient Frame</h3>
+                    <div class="color-grid" id="frameGradientColorList"></div>
+                </div>
+            </div>
+
+            <div id="itemsTabPanel" class="shop-tab-panel hidden">
+                <h3 class="shop-group-heading">✨ Power-Ups</h3>
+                <div class="shop-section">
+                    <div class="item-grid" id="itemsList"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================
+         PURCHASE CONFIRMATION — shown before any coin spend.
+         ============================================================ -->
+    <div id="confirmOverlay" class="confirm-overlay hidden">
+        <div class="confirm-card">
+            <p id="confirmMessage">Buy this color?</p>
+            <div class="confirm-actions">
+                <button id="confirmCancelBtn" class="confirm-btn confirm-cancel">CANCEL</button>
+                <button id="confirmYesBtn" class="confirm-btn confirm-yes">CONFIRM</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================
+         COLOR PICKER — for Custom / Gradient purchases. Picking the
+         color IS the purchase confirmation for these premium tiers.
+         ============================================================ -->
+    <div id="colorPickOverlay" class="confirm-overlay hidden">
+        <div class="confirm-card color-pick-card">
+            <h3 id="colorPickTitle">Choose Your Color</h3>
+            <div class="color-pick-inputs" id="colorPickInputs"></div>
+            <p id="colorPickPrice" class="color-pick-price"></p>
+            <div class="confirm-actions">
+                <button id="colorPickCancelBtn" class="confirm-btn confirm-cancel">CANCEL</button>
+                <button id="colorPickConfirmBtn" class="confirm-btn confirm-yes">CONFIRM &amp; BUY</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Game logic lives in its own file, linked like a normal website script.
+         Remember to bump ?v=N here too when you edit script.js. -->
+    <script src="script.js"></script>
+</body>
+</html>

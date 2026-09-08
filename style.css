@@ -1,0 +1,823 @@
+/* ============================================================
+   NEON EEL: OVERDRIVE  —  stylesheet
+   Dark arcade theme with neon glow, extended from the original.
+   Kept the original palette; added colors for the new item types.
+   ============================================================ */
+
+:root {
+    /* --- Core theme (from the original game) --- */
+    --bg-color:    #0b0c10;
+    --panel-bg:    #1f2833;
+    --text-main:   #c5c6c7;
+    --neon-green:  #66fcf1;   /* eel head / primary accent */
+    --neon-blue:   #45a29e;   /* eel body */
+    --neon-red:    #ff3366;   /* static bombs */
+
+    /* --- New item colors --- */
+    --shield-gold: #ffd166;   /* shield item + shielded eel */
+    --hazard-purple:#b967ff;  /* moving hazard */
+    --diamond-cyan:#5bc8ff;   /* +100 diamond */
+    --penalty-orange:#ff6b35; /* -100 penalty */
+
+    /* --- Frame theme (extra feature) — JS overrides these to re-skin the
+         phone panel (border/glow), its HUD text and D-pad (accent/glows),
+         and the board's own tint, all from the same equipped accent color. --- */
+    --frame-accent:     #66fcf1;
+    --frame-border:     rgba(102, 252, 241, 0.3);
+    --frame-glow:       rgba(102, 252, 241, 0.15);
+    --frame-glow-soft:  rgba(102, 252, 241, 0.25);
+    --frame-text-glow:  rgba(102, 252, 241, 0.5);
+}
+
+* { box-sizing: border-box; }
+
+body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background-color: var(--bg-color);
+    color: var(--text-main);
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    margin: 0;
+    padding: 3vh 10px 40px;
+    /* Stop the whole page from bouncing/scrolling on touch so swipes stay
+       inside the game instead of scrolling the phone. */
+    overscroll-behavior: none;
+}
+
+/* ============================================================
+   SPLASH / INTRO SCREEN — shown for ~3s on every fresh load, above
+   absolutely everything else (including the shop's own overlays),
+   then fades out to reveal the game underneath.
+   ============================================================ */
+.splash-screen {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    background: var(--bg-color);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    transition: opacity 0.5s ease;
+}
+.splash-screen.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+.splash-logo {
+    width: min(140px, 32vw);
+    height: min(140px, 32vw);
+    border-radius: 8%;
+    box-shadow: 0 0 40px rgba(102, 252, 241, 0.35);
+    animation: splashPulse 1.8s ease-in-out infinite;
+}
+.splash-title {
+    color: var(--neon-green);
+    font-size: clamp(28px, 8vw, 42px);
+    letter-spacing: 3px;
+    margin: 0;
+    text-shadow: 0 0 18px var(--neon-green);
+}
+.splash-subtitle {
+    color: var(--text-main);
+    font-size: clamp(13px, 4vw, 16px);
+    letter-spacing: 6px;
+    margin: 0;
+    opacity: 0.8;
+}
+@keyframes splashPulse {
+    0%, 100% { transform: scale(1); filter: brightness(1); }
+    50%      { transform: scale(1.04); filter: brightness(1.15); }
+}
+
+/* ============================================================
+   TOP BAR — lives OUTSIDE the phone panel (game-container).
+   Persistent coin total + shop access.
+   ============================================================ */
+.top-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: min(440px, 96vw);
+    margin-bottom: 14px;
+    gap: 12px;
+}
+.coin-display {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: clamp(15px, 4vw, 20px);
+    font-weight: bold;
+    letter-spacing: 0.5px;
+    color: var(--shield-gold);
+    text-shadow: 0 0 10px rgba(255, 209, 102, 0.5);
+}
+.shop-btn {
+    background: transparent;
+    color: var(--shield-gold);
+    border: 1px solid var(--shield-gold);
+    border-radius: 6px;
+    padding: 8px 16px;
+    font-size: clamp(13px, 3.6vw, 16px);
+    font-weight: bold;
+    letter-spacing: 1px;
+    cursor: pointer;
+    box-shadow: 0 0 10px rgba(255, 209, 102, 0.25);
+    transition: background 0.15s ease, transform 0.05s ease;
+    touch-action: manipulation;
+}
+.shop-btn:hover  { background: rgba(255, 209, 102, 0.12); }
+.shop-btn:active { transform: scale(0.96); }
+
+.top-bar-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.game-container {
+    position: relative;
+    background: var(--panel-bg);
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 0 30px var(--frame-glow);
+    border: 1px solid var(--frame-border);
+    border-image: none;       /* JS switches this to a gradient for Gradient Frame themes */
+    transition: box-shadow 0.3s ease, border-color 0.3s ease;
+    width: min(440px, 96vw);   /* responsive: shrinks on small phones */
+}
+
+/* ---- Top HUD ---- */
+.header {
+    display: flex;
+    align-items: flex-end;       /* pause button lines up with the last stat row (SPEED) */
+    gap: 4px;                    /* tight space between the stats and the pause button */
+    margin-bottom: 16px;
+    min-height: 20px;            /* steady height whether or not the button is showing */
+}
+.stats {
+    flex: 1 1 auto;
+    display: flex;
+    flex-wrap: wrap;             /* 4 stats: wrap to two rows on smaller phones */
+    justify-content: space-between;
+    gap: 12px 14px;             /* row-gap 12px = space between the SCORE and SPEED rows */
+    font-size: clamp(13px, 3.6vw, 19px);
+    font-weight: bold;
+    letter-spacing: 1px;
+    color: var(--frame-accent);
+    text-shadow: 0 0 10px var(--frame-text-glow);
+}
+.stat { white-space: nowrap; }
+
+/* ---- Playfield ---- */
+.board-wrapper {
+    position: relative;
+    line-height: 0; /* removes gap under the canvas */
+}
+
+canvas {
+    background-color: #111418;
+    border-radius: 6px;
+    box-shadow: inset 0 0 20px rgba(0,0,0,0.8);
+    display: block;
+    width: 100%;          /* scale to the container... */
+    height: auto;
+    aspect-ratio: 1 / 1;  /* ...but always stay a square */
+    /* Prevent the browser from treating swipes as scroll/zoom gestures. */
+    touch-action: none;
+}
+
+/* ============================================================
+   OVERLAYS (start hint + game over)
+   ============================================================ */
+.overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(11, 12, 16, 0.85);
+    backdrop-filter: blur(3px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    transition: opacity 0.3s ease;
+    z-index: 10;
+    text-align: center;
+    padding: 20px;
+    line-height: 1.5;
+}
+
+.overlay.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.overlay h2 {
+    color: var(--neon-red);
+    font-size: clamp(28px, 9vw, 38px);
+    margin: 0 0 10px 0;
+    text-shadow: 0 0 15px var(--neon-red);
+}
+
+.overlay .start-title {
+    color: var(--neon-green);
+    text-shadow: 0 0 18px var(--neon-green);
+}
+
+/* PAUSED title uses the green accent instead of the red crash color */
+.overlay .pause-title {
+    color: var(--neon-green);
+    text-shadow: 0 0 18px var(--neon-green);
+}
+
+/* ---- Pause / resume button (small circle at the right end of the SPEED row) ---- */
+.pause-btn {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: rgba(11, 12, 16, 0.75);
+    color: var(--neon-green);
+    border: 1px solid var(--neon-green);
+    font-size: 8px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 0 10px rgba(102, 252, 241, 0.35);
+    touch-action: manipulation;
+}
+.pause-btn:hover  { background: rgba(102, 252, 241, 0.15); }
+.pause-btn:active { transform: scale(0.92); }
+.pause-btn.hidden { display: none; }
+
+/* ---- Bomb Defuser in-game button (sits beside the pause button) ---- */
+.bomb-clear-btn {
+    height: 24px;
+    min-width: 34px;
+    padding: 0 6px;
+    border-radius: 12px;
+    background: rgba(11, 12, 16, 0.75);
+    color: var(--penalty-orange);
+    border: 1px solid var(--penalty-orange);
+    font-size: 11px;
+    font-weight: bold;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    cursor: pointer;
+    box-shadow: 0 0 10px rgba(255, 107, 53, 0.35);
+    touch-action: manipulation;
+}
+.bomb-clear-btn:hover  { background: rgba(255, 107, 53, 0.15); }
+.bomb-clear-btn:active { transform: scale(0.92); }
+.bomb-clear-btn.hidden { display: none; }
+.bomb-clear-btn:disabled {
+    color: #6a7078;
+    border-color: #6a7078;
+    box-shadow: none;
+    cursor: default;
+}
+
+/* ---- Resume countdown (big 3 / 2 / 1 number) ---- */
+.countdown-overlay { background: rgba(11, 12, 16, 0.65); }
+#countdownNum {
+    font-size: clamp(72px, 26vw, 130px);
+    font-weight: bold;
+    color: var(--neon-green);
+    text-shadow: 0 0 30px var(--neon-green);
+    /* Each number pops in and fades, restarted from JS every second */
+    animation: countPulse 1s ease-in-out;
+}
+@keyframes countPulse {
+    0%   { transform: scale(0.5); opacity: 0.1; }
+    40%  { transform: scale(1.15); opacity: 1; }
+    100% { transform: scale(1); opacity: 0.85; }
+}
+
+.overlay p { color: var(--text-main); font-size: 15px; margin: 4px 0; }
+.final-stats { color: var(--neon-green) !important; font-weight: bold; margin-top: 8px; }
+.best-line   { color: var(--shield-gold) !important; font-weight: bold; letter-spacing: 1px; margin-top: 2px; }
+.coin-line   { color: var(--shield-gold) !important; font-weight: bold; letter-spacing: 0.5px; margin-top: 4px !important; }
+
+/* "NEW BEST!" badge on the game-over screen (only shown after a record run) */
+.new-best {
+    margin-top: 10px;
+    color: var(--shield-gold);
+    font-weight: bold;
+    letter-spacing: 1px;
+    text-shadow: 0 0 12px var(--shield-gold);
+    animation: pulseBest 0.8s ease-in-out infinite;
+}
+.new-best.hidden { display: none; }   /* own hidden rule (the .overlay.hidden one uses opacity) */
+@keyframes pulseBest { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+
+/* ---- Neon button (restart) ---- */
+.btn {
+    margin-top: 16px;
+    background: transparent;
+    color: var(--neon-green);
+    border: 1px solid var(--neon-green);
+    border-radius: 6px;
+    padding: 10px 22px;
+    font-size: 16px;
+    font-weight: bold;
+    letter-spacing: 1px;
+    cursor: pointer;
+    box-shadow: 0 0 12px rgba(102, 252, 241, 0.3);
+    transition: background 0.15s ease, transform 0.05s ease;
+    touch-action: manipulation;
+}
+.btn:hover  { background: rgba(102, 252, 241, 0.12); }
+.btn:active { transform: scale(0.96); }
+
+/* ---- Game-over action row (RESTART, and CONTINUE when a charge is owned) ---- */
+.game-over-actions {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+.continue-btn {
+    color: var(--shield-gold);
+    border-color: var(--shield-gold);
+    box-shadow: 0 0 12px rgba(255, 209, 102, 0.35);
+}
+.continue-btn:hover { background: rgba(255, 209, 102, 0.12); }
+.continue-btn.hidden { display: none; }
+
+/* ============================================================
+   TOAST / WARNING BANNER
+   Slides in near the top of the board for short messages such as
+   "HAZARD INCOMING", "LEVEL UP", "+100", "SHIELD ON".
+   ============================================================ */
+.toast {
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-12px);
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-weight: bold;
+    font-size: clamp(12px, 3.4vw, 15px);
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.25s ease, transform 0.25s ease;
+    z-index: 9;
+    background: rgba(11, 12, 16, 0.9);
+    border: 1px solid var(--neon-green);
+    color: var(--neon-green);
+    box-shadow: 0 0 14px rgba(102, 252, 241, 0.4);
+}
+.toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+/* Per-message-type coloring (class added by showToast() in script.js) */
+.toast.warning { border-color: var(--penalty-orange); color: var(--penalty-orange); box-shadow: 0 0 16px rgba(255,107,53,0.55); }
+.toast.level   { border-color: var(--neon-green);     color: var(--neon-green); }
+.toast.diamond { border-color: var(--diamond-cyan);   color: var(--diamond-cyan); }
+.toast.penalty { border-color: var(--penalty-orange); color: var(--penalty-orange); }
+.toast.hazard  { border-color: var(--hazard-purple);  color: var(--hazard-purple); box-shadow: 0 0 16px rgba(185,103,255,0.55); }
+.toast.shield  { border-color: var(--shield-gold);    color: var(--shield-gold); box-shadow: 0 0 16px rgba(255,209,102,0.55); }
+.toast.evolution { border-color: var(--shield-gold);  color: var(--shield-gold); box-shadow: 0 0 18px rgba(255,209,102,0.7); }
+
+/* ============================================================
+   ON-SCREEN D-PAD (touch controls)
+   3x3 grid; only the cross cells hold buttons.
+   ============================================================ */
+.touch-controls {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    gap: 8px;
+    width: min(240px, 70vw);
+    margin: 18px auto 0;
+    aspect-ratio: 1 / 1;
+}
+
+.dpad-btn {
+    background: #2b3744;
+    color: var(--frame-accent);
+    border: 1px solid var(--frame-accent);
+    border-radius: 10px;
+    font-size: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    box-shadow: 0 0 8px var(--frame-glow);
+    /* manipulation stops the 300ms tap delay + double-tap zoom on mobile */
+    touch-action: manipulation;
+    transition: background 0.1s ease, transform 0.05s ease;
+}
+.dpad-btn:active {
+    background: var(--frame-glow-soft);
+    transform: scale(0.94);
+}
+
+/* Place each arrow in the cross layout */
+.dpad-btn.up    { grid-column: 2; grid-row: 1; }
+.dpad-btn.left  { grid-column: 1; grid-row: 2; }
+.dpad-btn.down  { grid-column: 2; grid-row: 3; }
+.dpad-btn.right { grid-column: 3; grid-row: 2; }
+
+/* ============================================================
+   INSTRUCTIONS + LEGEND
+   ============================================================ */
+.controls {
+    margin-top: 22px;
+    color: #8c929a;
+    font-size: 13px;
+    text-align: center;
+    line-height: 1.8;
+    max-width: 440px;
+}
+
+.legend {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px 14px;
+    margin-bottom: 12px;
+}
+.legend-item { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+
+/* Small colored dot in front of each legend label */
+.dot {
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    display: inline-block;
+}
+.dot.food    { background: #e5e6e8; box-shadow: 0 0 6px var(--neon-green); }
+.dot.diamond { background: var(--diamond-cyan);   box-shadow: 0 0 6px var(--diamond-cyan); }
+.dot.penalty { background: var(--penalty-orange); box-shadow: 0 0 6px var(--penalty-orange); }
+.dot.bomb    { background: var(--neon-red);       box-shadow: 0 0 6px var(--neon-red); }
+.dot.hazard  { background: var(--hazard-purple);  box-shadow: 0 0 6px var(--hazard-purple); }
+.dot.shield  { background: var(--shield-gold);    box-shadow: 0 0 6px var(--shield-gold); }
+
+kbd {
+    background-color: #2b3744;
+    color: var(--neon-green);
+    padding: 3px 7px;
+    border-radius: 4px;
+    font-family: monospace;
+    border: 1px solid var(--neon-green);
+    box-shadow: 0 0 5px rgba(102, 252, 241, 0.2);
+    margin: 0 1px;
+}
+
+/* ============================================================
+   SHOP OVERLAY
+   Covers the ENTIRE page (not just the phone panel) and blurs
+   everything behind it, per the "outside the phone UI" design.
+   ============================================================ */
+.shop-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(11, 12, 16, 0.75);
+    backdrop-filter: blur(6px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    padding: 20px;
+    transition: opacity 0.2s ease;
+}
+.shop-overlay.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.shop-card {
+    background: var(--panel-bg);
+    border: 1px solid rgba(255, 209, 102, 0.4);
+    border-radius: 12px;
+    box-shadow: 0 0 40px rgba(255, 209, 102, 0.2);
+    width: min(480px, 100%);
+    max-height: 85vh;
+    overflow-y: auto;
+    padding: 20px;
+}
+
+.shop-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 16px;
+    position: sticky;
+    top: -20px;
+    background: var(--panel-bg);
+    padding: 4px 0 10px;
+}
+.shop-header h2 {
+    color: var(--shield-gold);
+    text-shadow: 0 0 15px var(--shield-gold);
+    margin: 0;
+    font-size: clamp(20px, 6vw, 26px);
+}
+.shop-coin-display {
+    color: var(--shield-gold);
+    font-weight: bold;
+    white-space: nowrap;
+}
+.close-shop-btn {
+    width: 28px;
+    height: 28px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    background: rgba(11, 12, 16, 0.75);
+    color: var(--neon-red);
+    border: 1px solid var(--neon-red);
+    font-size: 14px;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+.close-shop-btn:active { transform: scale(0.92); }
+
+/* ---- Shop tabs (Colors / Items) ---- */
+.shop-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 18px;
+}
+.shop-tab-btn {
+    flex: 1 1 auto;
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--text-main);
+    border: 1px solid rgba(197, 198, 199, 0.25);
+    border-radius: 8px;
+    padding: 9px 10px;
+    font-size: 13px;
+    font-weight: bold;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+.shop-tab-btn.active {
+    color: var(--shield-gold);
+    border-color: var(--shield-gold);
+    box-shadow: 0 0 10px rgba(255, 209, 102, 0.3);
+}
+.shop-tab-panel.hidden { display: none; }
+
+.shop-group-heading {
+    font-size: 16px;
+    letter-spacing: 0.5px;
+    color: var(--text-main);
+    margin: 4px 0 4px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(197, 198, 199, 0.15);
+}
+.shop-group-heading:first-child { margin-top: 0; padding-top: 0; border-top: none; }
+.shop-group-hint {
+    font-size: 11px;
+    color: #8c929a;
+    margin: 0 0 14px;
+}
+
+.shop-section { margin-bottom: 20px; }
+.shop-section h3 {
+    font-size: 14px;
+    letter-spacing: 1px;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+}
+.shop-section h3.tier-basic    { color: var(--neon-green); }
+.shop-section h3.tier-advanced { color: var(--hazard-purple); }
+.shop-section h3.tier-custom   { color: var(--shield-gold); }
+/* Gradient tier: the priciest, so its heading gets a rainbow treatment. */
+.shop-section h3.tier-gradient {
+    background: linear-gradient(90deg, var(--hazard-purple), var(--shield-gold), var(--diamond-cyan));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+
+.color-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 12px;
+}
+
+.color-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(197, 198, 199, 0.15);
+    border-radius: 10px;
+    padding: 12px 10px;
+    text-align: center;
+}
+.color-card.equipped {
+    border-color: var(--shield-gold);
+    box-shadow: 0 0 12px rgba(255, 209, 102, 0.35);
+}
+.color-card.locked { opacity: 0.6; }
+
+.color-swatch {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    border: 1px solid rgba(0, 0, 0, 0.4);
+}
+
+.color-name {
+    font-size: 12px;
+    font-weight: bold;
+    color: var(--text-main);
+}
+
+/* ---- Items tab (power-ups: Bomb Defuser, Second Chance) ---- */
+.item-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 12px;
+}
+.item-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(197, 198, 199, 0.15);
+    border-radius: 10px;
+    padding: 16px 12px;
+    text-align: center;
+}
+.item-card.locked { opacity: 0.6; }
+.item-icon {
+    font-size: 30px;
+    line-height: 1;
+}
+.item-name {
+    font-size: 13px;
+    font-weight: bold;
+    color: var(--text-main);
+}
+.item-desc {
+    font-size: 11px;
+    color: #8c929a;
+    line-height: 1.4;
+}
+.item-owned-count {
+    font-size: 11px;
+    letter-spacing: 0.5px;
+    color: var(--shield-gold);
+    text-transform: uppercase;
+}
+
+
+.color-action-btn {
+    background: transparent;
+    color: var(--neon-green);
+    border: 1px solid var(--neon-green);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 11px;
+    font-weight: bold;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    touch-action: manipulation;
+    white-space: nowrap;
+}
+.color-action-btn:not(:disabled):hover  { background: rgba(102, 252, 241, 0.12); }
+.color-action-btn:not(:disabled):active { transform: scale(0.95); }
+.color-action-btn:disabled {
+    color: #6a7078;
+    border-color: #6a7078;
+    cursor: default;
+}
+/* Higher specificity than the plain :disabled rule above, so an equipped
+   (and therefore disabled) button still reads as "active", not "locked". */
+.color-card.equipped .color-action-btn:disabled {
+    color: var(--shield-gold);
+    border-color: var(--shield-gold);
+}
+
+/* ============================================================
+   CONFIRMATION MODALS
+   Stack ABOVE the shop overlay (higher z-index) for: a plain buy
+   confirmation, and the custom/gradient color-picker (which doubles
+   as that tier's purchase confirmation).
+   ============================================================ */
+.confirm-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(11, 12, 16, 0.8);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+    padding: 20px;
+    transition: opacity 0.2s ease;
+}
+.confirm-overlay.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.confirm-card {
+    background: var(--panel-bg);
+    border: 1px solid rgba(102, 252, 241, 0.4);
+    border-radius: 12px;
+    box-shadow: 0 0 30px rgba(102, 252, 241, 0.2);
+    width: min(320px, 100%);
+    padding: 22px 20px;
+    text-align: center;
+}
+.confirm-card p {
+    color: var(--text-main);
+    font-size: 15px;
+    margin: 0;
+}
+
+.confirm-actions {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    margin-top: 18px;
+}
+.confirm-btn {
+    background: transparent;
+    border-radius: 6px;
+    padding: 9px 18px;
+    font-size: 13px;
+    font-weight: bold;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    touch-action: manipulation;
+    transition: background 0.15s ease, transform 0.05s ease;
+}
+.confirm-btn:active { transform: scale(0.95); }
+.confirm-cancel {
+    color: var(--neon-red);
+    border: 1px solid var(--neon-red);
+}
+.confirm-cancel:hover { background: rgba(255, 51, 102, 0.12); }
+.confirm-yes {
+    color: var(--neon-green);
+    border: 1px solid var(--neon-green);
+}
+.confirm-yes:hover { background: rgba(102, 252, 241, 0.12); }
+
+/* ---- Color-pick modal (custom / gradient) ---- */
+.color-pick-card { width: min(360px, 100%); }
+.color-pick-card h3 {
+    color: var(--shield-gold);
+    text-shadow: 0 0 12px var(--shield-gold);
+    margin: 0 0 16px;
+    font-size: 18px;
+}
+.color-pick-inputs {
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+    flex-wrap: wrap;
+}
+.color-pick-input-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+}
+.color-pick-input-group label {
+    font-size: 11px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: var(--text-main);
+}
+.color-pick-input-group input[type="color"] {
+    width: 56px;
+    height: 40px;
+    padding: 0;
+    border: 1px solid rgba(197, 198, 199, 0.3);
+    border-radius: 6px;
+    background: none;
+    cursor: pointer;
+}
+/* Live gradient preview swatch (non-interactive) beside the start/end pickers. */
+.color-pick-preview-swatch {
+    width: 56px;
+    height: 40px;
+    border: 1px solid rgba(197, 198, 199, 0.3);
+    border-radius: 6px;
+}
+.color-pick-price {
+    color: var(--shield-gold) !important;
+    font-weight: bold;
+    margin-top: 14px !important;
+}
