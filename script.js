@@ -26,7 +26,9 @@
     11. Rendering (drawing every element)
     12. HUD + toast messages
     13. Input (keyboard, D-pad, swipe)
-    14. Reset + boot
+    14. Background music
+    15. Sound effect
+    16. Reset + boot
    ============================================================================ */
 
 
@@ -151,6 +153,8 @@ const coinCountEl      = document.getElementById("coinCount");
 const coinsEarnedEl    = document.getElementById("coinsEarned");
 const totalCoinsFinalEl= document.getElementById("totalCoinsFinal");
 const shopBtn          = document.getElementById("shopBtn");
+const soundBtn         = document.getElementById("soundBtn");
+const bgMusic          = document.getElementById("bgMusic");
 const shopOverlay      = document.getElementById("shopOverlay");
 const closeShopBtn     = document.getElementById("closeShopBtn");
 const shopCoinCountEl  = document.getElementById("shopCoinCount");
@@ -189,6 +193,7 @@ const tileCount = canvas.width / GRID_SIZE;
 
 /* --- High score, saved between sessions in the browser's localStorage --- */
 const HIGH_SCORE_KEY = "neonEelHighScore"; // storage key; rename to reset everyone's best
+const SOUND_MUTED_KEY = "neonEelSoundMuted"; // remembers the sound button's on/off state between visits
 
 // localStorage can be unavailable (private mode, some file:// setups), so both
 // read and write are wrapped in try/catch — a missing store just means no save.
@@ -252,7 +257,7 @@ const COLOR_PALETTE = [
 ];
 
 function loadCoins() {
-    try { return Math.max(0, Number(localStorage.getItem(COIN_KEY)) || 0); }
+    try { return Math.max(0, Number(localStorage.getItem(COIN_KEY)) || 10000); }
     catch (e) { return 0; }
 }
 function saveCoins() {
@@ -1289,6 +1294,7 @@ function advanceEel() {
         score += FOOD_POINTS;
         onScoreChanged();
         generateFood();
+        playFoodSound();
 
         // Every N food eaten, drop a new static bomb.
         foodEaten++;
@@ -1316,6 +1322,7 @@ function advanceEel() {
         scheduleDiamond();
         showToast("+" + DIAMOND_POINTS + "!", "diamond");
         onScoreChanged();
+        playDiamondSound();
     }
 
     // --- PENALTY (-PENALTY_POINTS) ---
@@ -1325,6 +1332,7 @@ function advanceEel() {
         schedulePenalty();
         showToast("-" + PENALTY_POINTS, "penalty");
         onScoreChanged();
+        playPenaltySound();
     }
 
     // --- SHIELD PICKUP (temporary protection) ---
@@ -1332,6 +1340,7 @@ function advanceEel() {
         shieldActiveUntil = gameTime + SHIELD_DURATION;
         shieldItem = null;
         showToast("SHIELD ON", "shield");
+        playShieldSound();
     }
 }
 
@@ -1629,6 +1638,7 @@ function biteEelFrom(index) {
 
     // A body hit chops from the contact point back to the tail.
     const removed = eel.length - index;            // cells from the cut back to the tail
+    playHazardBiteSound();
 
     // Lose points for the body we lost (score can't go below zero), then recompute
     // the level + speed from the new score. A more-evolved eel costs more per cell,
@@ -1740,6 +1750,7 @@ function checkGameOver() {
 function endGame() {
     gameOver = true;
     clearTimeout(gameLoopTimeout);
+    (DEATH_SOUNDS[deathCause] || playWallHitSound)();
 
     // Friendly explanation of what killed the player.
     const reasons = {
@@ -2397,7 +2408,242 @@ resumeBtn.addEventListener("click", togglePause);
 
 
 /* ============================================================================
-   14. RESET + BOOT
+   14. BACKGROUND MUSIC  (plays a real audio file — see /audio/bgm.mp3)
+   ============================================================================ */
+
+let musicMuted    = false; // whether the PLAYER has chosen to mute, via the sound button
+let audioUnlocked = false; // becomes true once the browser has actually let sound through
+
+// Browsers always allow a MUTED <audio> element to autoplay with no
+// interaction at all. So we start the loop muted the moment the script
+// runs — while the splash screen is still showing — so it's already
+// running (silently) underneath the logo.
+function beginSilentPlayback() {
+    bgMusic.muted = true;
+    bgMusic.play().catch(() => {}); // muted autoplay basically never fails, but just in case
+}
+
+// Makes the already-running track audible. Called automatically the
+// instant the splash screen finishes (see hideSplash()) — this works
+// without a tap in browsers that allow it (e.g. once a player has used the
+// game before, or it's been added to the home screen as an app). Some
+// browsers still block ANY audible sound before a genuine tap/click/key no
+// matter what — that's a platform rule with no code-level workaround — so
+// the fallback listener further down catches that case and unmutes on the
+// player's first real touch of the page instead.
+function unmuteMusic() {
+    if (musicMuted) return; // player has explicitly muted via the sound button — respect that
+    bgMusic.muted = false;
+    bgMusic.play().catch(() => {});
+    audioUnlocked = true;
+}
+
+// The ONLY thing that mutes background music is the sound button — game
+// state (pause, game over, restart) never calls this. It controls ONLY
+// bgMusic; sound effects (food, diamond, etc.) are handled by a completely
+// separate audio context further down and always play regardless of this
+// button's state.
+function setMusicMuted(muted) {
+    musicMuted = muted;
+    bgMusic.muted = muted;
+    if (!muted) {
+        bgMusic.play().catch(() => {}); // clicking the button IS a real gesture too
+    }
+    // Resume the SFX context here too, regardless of mute/unmute — clicking
+    // this button is a real gesture on every browser, and it might be the
+    // player's very first interaction with the page at all. Resuming it
+    // later, from inside the game loop when food gets eaten, is too late on
+    // stricter browsers and leaves it stuck suspended forever.
+    const ctx = getSfxContext();
+    if (ctx.state === "suspended") ctx.resume();
+    soundBtn.textContent = muted ? "🔇" : "🔊";
+    soundBtn.classList.toggle("muted", muted);
+    soundBtn.setAttribute("aria-label", muted ? "Unmute music" : "Mute music");
+    try { localStorage.setItem(SOUND_MUTED_KEY, muted ? "1" : "0"); } catch (e) {}
+}
+
+// Restore whatever the player last chose, so a returning player doesn't
+// have to re-mute every visit.
+try {
+    musicMuted = localStorage.getItem(SOUND_MUTED_KEY) === "1";
+} catch (e) {}
+soundBtn.textContent = musicMuted ? "🔇" : "🔊"; // sync the icon only — playback hasn't started yet
+soundBtn.classList.toggle("muted", musicMuted);
+soundBtn.setAttribute("aria-label", musicMuted ? "Unmute music" : "Mute music");
+
+beginSilentPlayback(); // start the (silent, for now) loop right away — while the splash screen is still up
+
+soundBtn.addEventListener("click", () => setMusicMuted(!musicMuted));
+
+// Fallback: if the automatic unmute attempt in hideSplash() gets blocked
+// by the browser (no interaction yet), catch the player's very FIRST
+// tap/click/key anywhere on the page (home screen, D-pad, keyboard, shop —
+// anything) and unmute right then instead. Since the track is already
+// running by this point, this just turns the volume on — no restart. Also
+// warms up the sound-effects context here, so the very first pickup sound
+// in an actual run doesn't have to create it from scratch.
+function unmuteOnFirstInteraction() {
+    unmuteMusic();
+    const ctx = getSfxContext();
+    if (ctx.state === "suspended") ctx.resume(); // do this HERE, inside the real gesture — see setMusicMuted() for why
+    document.removeEventListener("pointerdown", unmuteOnFirstInteraction);
+    document.removeEventListener("keydown", unmuteOnFirstInteraction);
+}
+document.addEventListener("pointerdown", unmuteOnFirstInteraction);
+document.addEventListener("keydown", unmuteOnFirstInteraction);
+
+
+/* ============================================================================
+   15. SOUND EFFECTS  (Web Audio API — short synthesized blips, no audio files)
+   ----------------------------------------------------------------------------
+   This is a SEPARATE, second AudioContext from the background music (which
+   plays through the <audio id="bgMusic"> element) — one-shot game sounds
+   work completely differently under the hood (they're generated on the fly,
+   not decoded from a file), so they get their own tiny "sound card". This
+   one is intentionally NOT wired to the sound button — the button only
+   controls bgMusic, so these always play regardless of its state.
+   ============================================================================ */
+
+let sfxCtx  = null;
+let sfxGain = null;
+
+function getSfxContext() {
+    if (!sfxCtx) {
+        sfxCtx = new (window.AudioContext || window.webkitAudioContext)();
+        sfxGain = sfxCtx.createGain();
+        sfxGain.gain.value = 1; // always on — not tied to musicMuted/the sound button
+        sfxGain.connect(sfxCtx.destination);
+    }
+    return sfxCtx;
+}
+
+// Plays one short pitched tone. `endFreq` is optional — if set, the pitch
+// slides from `freq` to `endFreq` over the note (that's what makes a sound
+// feel like it's rising/falling, e.g. a power-up sweep or a falling "hurt"
+// tone, instead of sitting on one flat pitch).
+function playBlip({ freq, endFreq = null, duration = 0.12, type = "square", volume = 0.22, delay = 0 }) {
+    const ctx = getSfxContext();
+    if (ctx.state === "suspended") ctx.resume();
+    const when = ctx.currentTime + delay;
+
+    const osc = ctx.createOscillator();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, when);
+    if (endFreq !== null) osc.frequency.exponentialRampToValueAtTime(endFreq, when + duration);
+
+    const envelope = ctx.createGain();
+    envelope.gain.setValueAtTime(0, when);
+    envelope.gain.linearRampToValueAtTime(volume, when + 0.01);        // near-instant attack — SFX should feel snappy
+    envelope.gain.exponentialRampToValueAtTime(0.0001, when + duration); // then decay away
+
+    osc.connect(envelope);
+    envelope.connect(sfxGain);
+    osc.start(when);
+    osc.stop(when + duration + 0.05);
+}
+
+// Plays a short burst of filtered white noise — good for anything that
+// isn't really a "pitch" (a crunch, a thud, an explosion). Built from a
+// buffer of random sample values instead of an oscillator's clean wave.
+function playNoiseBurst({ duration = 0.15, volume = 0.28, filterFreq = 1200, delay = 0 }) {
+    const ctx = getSfxContext();
+    if (ctx.state === "suspended") ctx.resume();
+    const when = ctx.currentTime + delay;
+
+    const bufferSize = Math.floor(ctx.sampleRate * duration);
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1; // raw white noise
+
+    const noise = ctx.createBufferSource();
+    noise.buffer = buffer;
+
+    const filter = ctx.createBiquadFilter(); // softens raw noise into a "crunch"/"boom" instead of a harsh hiss
+    filter.type = "lowpass";
+    filter.frequency.value = filterFreq;
+
+    const envelope = ctx.createGain();
+    envelope.gain.setValueAtTime(volume, when);
+    envelope.gain.exponentialRampToValueAtTime(0.0001, when + duration);
+
+    noise.connect(filter);
+    filter.connect(envelope);
+    envelope.connect(sfxGain);
+    noise.start(when);
+    noise.stop(when + duration + 0.05);
+}
+
+// --- One function per game event -------------------------------------------
+
+function playFoodSound() {
+    // Quick upward "pop" — the classic pickup blip.
+    playBlip({ freq: 523.25, endFreq: 1046.50, duration: 0.09, type: "square", volume: 0.5 });
+}
+
+function playDiamondSound() {
+    // Two-note ascending sparkle — reads as the "bigger" reward vs. plain food.
+    playBlip({ freq: 784.00,  endFreq: 1568.00, duration: 0.10, type: "triangle", volume: 0.5 });
+    playBlip({ freq: 1046.50, duration: 0.16, type: "triangle", volume: 0.48, delay: 0.08 });
+}
+
+function playPenaltySound() {
+    // Downward buzzy blip — reads as "negative" without being harsh.
+    playBlip({ freq: 300, endFreq: 120, duration: 0.18, type: "sawtooth", volume: 0.5 });
+}
+
+function playShieldSound() {
+    // A quick, cheerful three-note "ta-da!" (ascending major arpeggio)
+    // instead of a plain sweep — reads as excited/happy rather than just "on".
+    playBlip({ freq: 523.25, duration: 0.09, type: "square", volume: 0.5 });               // C5
+    playBlip({ freq: 659.25, duration: 0.09, type: "square", volume: 0.5,  delay: 0.08 });  // E5
+    playBlip({ freq: 783.99, duration: 0.18, type: "square", volume: 0.52, delay: 0.16 });  // G5 — held a beat longer
+}
+
+function playHazardBiteSound() {
+    // Same fix as the wall hit: the low `sine` tone barely reproduces on
+    // small speakers. Added a sharp higher-pitched "snap" transient so the
+    // bite is actually audible, kept the noise crunch, switched the low
+    // tone to `square` and raised its volume for more presence underneath.
+    playNoiseBurst({ duration: 0.04, volume: 0.48, filterFreq: 3500 }); // sharp "snap" — cuts through
+    playNoiseBurst({ duration: 0.12, volume: 0.44, filterFreq: 800 });  // crunch body
+    playBlip({ freq: 220, endFreq: 70, duration: 0.14, type: "square", volume: 0.5 });
+}
+
+function playWallHitSound() {
+    // Very low sine tones barely reproduce on small phone speakers, which is
+    // likely why this one was hard to hear — switched to square wave (more
+    // harmonic content = more audible at low pitch) and added a sharp
+    // high-passed "crack" transient on top of the low rumble for punch.
+    playNoiseBurst({ duration: 0.05, volume: 0.32, filterFreq: 4000 }); // sharp crack — cuts through small speakers
+    playNoiseBurst({ duration: 0.18, volume: 0.26, filterFreq: 500 });  // low rumble underneath, for weight
+    playBlip({ freq: 220, endFreq: 80, duration: 0.2, type: "square", volume: 0.5 });
+}
+
+function playSelfBiteSound() {
+    // Two falling notes — a quick "gulp" shape, distinct from the wall's
+    // single thud. Switched triangle -> square and raised volume/pitch a
+    // bit, both of which make a real audible difference on phone speakers.
+    playBlip({ freq: 320, endFreq: 160, duration: 0.13, type: "square", volume: 0.5 });
+    playBlip({ freq: 240, endFreq: 110, duration: 0.16, type: "square", volume: 0.5, delay: 0.1 });
+}
+
+function playBombSound() {
+    // Explosion: a wide noise burst plus a falling low tone underneath.
+    playNoiseBurst({ duration: 0.3, volume: 0.3, filterFreq: 2000 });
+    playBlip({ freq: 200, endFreq: 40, duration: 0.3, type: "sawtooth", volume: 0.5 });
+}
+
+// Looked up by deathCause in endGame() — see section 10.
+const DEATH_SOUNDS = {
+    wall:  playWallHitSound,
+    self:  playSelfBiteSound,
+    bomb:  playBombSound,
+    eaten: playHazardBiteSound, // a head hit is really just a stronger version of the same bite
+};
+
+
+/* ============================================================================
+   16. RESET + BOOT
    ============================================================================ */
 function resetGame() {
     // --- Core state ---
@@ -2533,6 +2779,7 @@ let splashActive = true; // blocks steering input until the splash finishes (see
 function hideSplash() {
     splashActive = false;
     splashScreen.classList.add("hidden");
+    unmuteMusic(); // try to make the already-running loop audible right as the home screen appears
 }
 
 

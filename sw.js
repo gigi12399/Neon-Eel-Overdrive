@@ -10,7 +10,7 @@
    here. Serve this folder over http(s) (a dev server, GitHub Pages, a mobile
    app wrapper like Median.co/Appilix/Swing2App, etc.) to see it activate.
    ============================================================================ */
-const CACHE_VERSION = "v6";
+const CACHE_VERSION = "v1";
 const CACHE_NAME = "neon-eel-" + CACHE_VERSION;
 
 const APP_SHELL = [

@@ -44,6 +44,11 @@
         <p class="splash-subtitle">OVERDRIVE</p>
     </div>
 
+    <!-- Background music -->
+    <audio id="bgMusic" loop preload="auto">
+        <source src="audio/moodmode.mp3" type="audio/mpeg">
+    </audio>
+
     <!-- ============================================================
          TOP BAR — lives OUTSIDE the phone panel (game-container).
          Shows the player's persistent coin total and opens the shop.
@@ -51,6 +56,7 @@
     <div class="top-bar">
         <div class="coin-display">🪙 <span id="coinCount">0</span></div>
         <div class="top-bar-actions">
+            <button id="soundBtn" class="sound-btn" aria-label="Mute background music" title="Mute background music">🔊</button>
             <button id="shopBtn" class="shop-btn">🛒 SHOP</button>
         </div>
     </div>
@@ -148,6 +154,12 @@
             <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>, the D-pad, or swipe.
             Restart with <kbd>SPACE</kbd>.
         </p>
+        <hr>
+        <p style="text-decoration: underline;"><strong>Group Members</strong></p>
+        <p>Htin Lin Aung - 240702404612 | Phu Phu - 240702404687</p>
+        <p>Phone Tay Za - 240702404819 | Thu Ta - 250702401886</p>
+        <p>Theingi Myint - 250702402025 | Anthony - 250702402030</p>
+        <p>Feras Tohyala - 680702402803</p>
     </div>
 
     <!-- ============================================================

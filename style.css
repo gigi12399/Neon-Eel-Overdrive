@@ -131,6 +131,33 @@ body {
 .shop-btn:hover  { background: rgba(255, 209, 102, 0.12); }
 .shop-btn:active { transform: scale(0.96); }
 
+/* ---- Sound toggle: mutes background music only; never affects pause/game-over ---- */
+.sound-btn {
+    width: 38px;
+    height: 38px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--neon-green);
+    border: 1px solid var(--neon-green);
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 0 10px rgba(102, 252, 241, 0.25);
+    transition: background 0.15s ease, transform 0.05s ease;
+    touch-action: manipulation;
+}
+.sound-btn:hover  { background: rgba(102, 252, 241, 0.12); }
+.sound-btn:active { transform: scale(0.92); }
+.sound-btn.muted  {
+    color: #888;
+    border-color: #888;
+    box-shadow: none;
+}
+
+
 .top-bar-actions {
     display: flex;
     align-items: center;
@@ -396,8 +423,8 @@ canvas {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     grid-template-rows: repeat(3, 1fr);
-    gap: 8px;
-    width: min(240px, 70vw);
+    gap: 5px;
+    width: min(220px, 60vw);
     margin: 18px auto 0;
     aspect-ratio: 1 / 1;
 }
