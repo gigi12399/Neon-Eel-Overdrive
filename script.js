@@ -147,6 +147,8 @@ const countdownNum   = document.getElementById("countdownNum");
 const continueBtn    = document.getElementById("continueBtn");
 const bombClearBtn   = document.getElementById("bombClearBtn");
 const bombClearCountEl = document.getElementById("bombClearCount");
+const secondChanceBadge   = document.getElementById("secondChanceBadge");
+const secondChanceCountEl = document.getElementById("secondChanceCount");
 
 /* --- Coins + shop DOM references --- */
 const coinCountEl      = document.getElementById("coinCount");
@@ -1154,6 +1156,9 @@ function updateBombClearHUD() {
     const owns = bombClearCharges > 0;
     bombClearBtn.classList.toggle("hidden", !owns || !hasStarted);
     bombClearBtn.disabled = !(owns && hasStarted && !gameOver && !paused && !countingDown && bombs.length > 0);
+
+    secondChanceCountEl.textContent = continueCharges;
+    secondChanceBadge.classList.toggle("hidden", continueCharges <= 0 || !hasStarted);
 }
 
 function useBombClear() {
@@ -2278,8 +2283,13 @@ document.addEventListener("keydown", (event) => {
     const key = event.key;
 
     // SPACE restarts after a crash.
-    if (key === " " && gameOver) {
-        restartGame();
+    if (key === " ") {
+        event.preventDefault();
+        if (gameOver) {
+            restartGame();
+        } else {
+            useBombClear();
+        }
         return;
     }
 
